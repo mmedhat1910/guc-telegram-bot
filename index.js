@@ -72,7 +72,29 @@ bot.command('login', (ctx) => {
   const jsonFile = require('./data.json');
   const username = jsonFile.username;
   const password = jsonFile.password;
-  ctx.reply(`Logged in! ${username} ${password}`);
+  console.log('username', username);
+  console.log('password', hidePassword(password));
+  ctx.reply(`Logged in! ${username} ${hidePassword(password)}`);
+});
+
+const hidePassword = (password) => {
+  if (password.length < 4) {
+    return '****';
+  }
+  let hiddenPassword = password[0] + password[1];
+  for (let i = 2; i < password.length - 2; i++) {
+    hiddenPassword += '*';
+  }
+  return (
+    hiddenPassword +
+    password[password.length - 2] +
+    password[password.length - 1]
+  );
+};
+bot.command('check', (ctx) => {
+  fetchEmails((data) => {
+    ctx.reply(data);
+  });
 });
 
 bot.launch();
@@ -98,3 +120,87 @@ app.post('/', (req, res) => {
 app.listen(port, () => {
   console.log(`Server listening on port ${port}`);
 });
+
+const fetchEmails = async (fn) => {
+  const jsonFile = require('./data.json');
+  const username = jsonFile.username;
+  const password = jsonFile.password;
+  const unread = jsonFile.unread || '-1';
+
+  if (!username || username === '' || !password || password === '') {
+    console.log('Please enter your username and password');
+    if (fn) {
+      fn('Please enter your username and password');
+    }
+    return;
+  }
+
+  console.log('Waiting...');
+  let browser;
+  try {
+    browser = await puppeteer.launch({
+      headless: false,
+      defaultViewport: null,
+    });
+    const page = await browser.newPage();
+    await page.goto(
+      'https://mail.guc.edu.eg/owa/auth/logon.aspx?replaceCurrent=1&url=https%3a%2f%2fmail.guc.edu.eg%2fowa%2f',
+      { waitUntil: 'networkidle2' }
+    );
+    await page.focus('#username');
+    await page.keyboard.type(username);
+    await page.focus('#password');
+    await page.keyboard.type(password);
+    await page.click('.signinbutton');
+    console.log('Logged in, retrieving emails...');
+    fn('Logged in, retrieving emails...');
+    await page.waitForXPath('//*[@id="frm"]');
+    await page.waitForSelector('a[name="lnkFldr"]');
+    let data = await page.evaluate(() => {
+      // return document.querySelector('span[id=spnCV]').innerText;
+      const unread = document.querySelector('span[class="unrd"]');
+      if(unread === null || unread === undefined){
+        console.log('No new emails');
+        if (fn) {
+          fn('No new emails');
+        }
+        return;
+      }
+      return unread.innerText;
+    })
+    data = data.replace('(', '');
+    data = data.replace(')', '');
+    console.log(data);
+    let num = parseInt(data);
+    if(num != unread){
+      console.log(num + ' New email(s)!');
+      if (fn) {
+        fn(num+' New email(s)!');
+      }
+      jsonFile.unread = num;
+      fs.writeFile('data.json', JSON.stringify(jsonFile), (err) => {
+        if (err) throw err;
+        console.log('Data written to file');
+      });
+    }
+    else{
+      console.log('No new emails');
+      if (fn) {
+        fn('No new emails');
+      }
+    }
+  } catch (e) {
+    console.error(e);
+    if (fn) {
+      fn('Error' + e.message);
+    }
+    return;
+  } finally {
+      await browser.close();
+  }
+};
+
+///html/body/form/table/tbody/tr[2]/td[1]/table/tbody/tr[2]/td/table/tbody/tr/td/table[1]/tbody/tr[3]/td/a
+////*[@id="frm"]/table/tbody/tr[2]/td[1]/table/tbody/tr[2]/td/table/tbody/tr/td/table[1]/tbody/tr[3]/td/a
+//#frm > table > tbody > tr:nth-child(2) > td.nvtp > table > tbody > tr:nth-child(2) > td > table > tbody > tr > td > table.snt > tbody > tr:nth-child(3) > td > a
+///html/body/form/table/tbody/tr[2]/td[1]/table/tbody/tr[2]/td/table/tbody/tr/td/table[1]/tbody/tr[3]/td
