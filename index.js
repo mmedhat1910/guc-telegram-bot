@@ -16,7 +16,20 @@ require('dotenv').config();
 const { Telegraf } = require('telegraf');
 const { message } = require('telegraf/filters');
 
-const jsonFile = require('./data.json');
+//check if data.json doesn't exist and create it
+if (!fs.existsSync('./data.json')) {
+  fs.writeFile(
+    'data.json',
+    JSON.stringify({
+      username: '',
+      password: '',
+    }),
+    (err) => {
+      if (err) throw err;
+      console.log('data.json created');
+    }
+  );
+}
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 let chatId = '';
