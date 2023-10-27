@@ -2,3 +2,4 @@
 .env
 .DS_Store
 .vscode/branch-timer.json
+data.json
